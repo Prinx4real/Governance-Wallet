@@ -27,6 +27,10 @@ contract Administration is ReentrancyGuard {
     error NoAdminsToRemove();
     error AdminNotFound();
     error CannotRemoveLastAdmin();
+    error InvalidTokenAmount();
+    error InsufficientTokenBalance();
+    error InvalidEtherAmount();
+    error InsufficientEtherBalance();
 
     constructor() {}
 
@@ -132,4 +136,30 @@ contract Administration is ReentrancyGuard {
         // Logic to return the current number of admins
         return admins.length; // Placeholder return value
     }
+
+    function sendTokens(IERC20 token, address to, uint256 amount) external nonReentrant {
+        if (!_isAdmin(msg.sender)) revert NotAdmin();
+        if (to == address(0)) revert InvalidAdminAddress();
+        if (amount == 0) revert InvalidTokenAmount();
+
+        uint256 contractBalance = token.balanceOf(address(this));
+        if (amount > contractBalance) revert InsufficientTokenBalance();
+        token.safeTransfer(to, amount);
+        
+    }
+
+    function sendEther(address payable to, uint256 amount) external nonReentrant {
+        if (!_isAdmin(msg.sender)) revert NotAdmin();
+        if (to == address(0)) revert InvalidAdminAddress();
+        if (amount == 0) revert InvalidEtherAmount();
+
+        uint256 contractBalance = address(this).balance;
+        if (amount > contractBalance) revert InsufficientEtherBalance();
+        (bool success, ) = to.call{value: amount}("");
+        require(success, "Ether transfer failed");
+    }
+
+    receive() external payable {}
+
+    fallback() external payable {}
 }
