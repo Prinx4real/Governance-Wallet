@@ -1,22 +1,15 @@
 //SPDX-License-Identifier: MIT
 pragma solidity 0.8.25;
 
-import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
-
-contract Administration is ReentrancyGuard {
-    using SafeERC20 for IERC20;
-
-    ////////// ////// State Variables //////////////
+abstract contract AdminLogic {
     uint256 public constant MAX_ADMINS = 5;
-    address[] private admins;
-    uint256 public signatureThreshold;
-    mapping(address => bool) private hasApprovedAdd;
-    uint256 private addApprovalCount;
-    address private pendingAdmin;
-
-    ////////////// Error Definitions //////////////
+    address[] internal admins;
+    mapping(address => bool) internal hasApprovedAdd;
+    uint256 internal addApprovalCount;
+    address internal pendingAdmin;
+    address internal pendingAdminRemoval;
+    uint256 internal removeApprovalCount;
+    mapping(address => bool) internal hasApprovedRemoval;
 
     error NotAdmin();
     error InvalidAdminAddress();
@@ -24,26 +17,8 @@ contract Administration is ReentrancyGuard {
     error AdminAlreadyExists();
     error AlreadyApproved();
     error DifferentAdminPending();
-    error NoAdminsToRemove();
     error AdminNotFound();
     error CannotRemoveLastAdmin();
-
-    constructor() {}
-
-    function addAdmin(address _admin) external nonReentrant {
-        if (!_isAdmin(msg.sender)) revert NotAdmin();
-        if (_admin == address(0)) revert InvalidAdminAddress();
-        if (admins.length >= MAX_ADMINS) revert MaxAdminsReached();
-        if (_isAdmin(_admin)) revert AdminAlreadyExists();
-        if (hasApprovedAdd[msg.sender]) revert AlreadyApproved();
-
-        _setPendingAdmin(_admin);
-        _approveAddAdmin();
-
-        if (addApprovalCount >= _getThreshold()) {
-            _executeAddAdmin();
-        }
-    }
 
     function _setPendingAdmin(address _admin) internal {
         if (pendingAdmin == address(0)) {
@@ -66,20 +41,6 @@ contract Administration is ReentrancyGuard {
 
         for (uint256 i = 0; i < admins.length; i++) {
             hasApprovedAdd[admins[i]] = false;
-        }
-    }
-
-    function removeAdmin(address _admin) external nonReentrant {
-        if (admins.length == 0) revert NoAdminsToRemove();
-        if (!_isAdmin(msg.sender)) revert NotAdmin();
-        if (!_isAdmin(_admin)) revert AdminNotFound();
-        if (hasApprovedRemoval[msg.sender]) revert AlreadyApproved();
-
-        _setPendingAdminRemoval(_admin);
-        _approveAdminRemoval();
-
-        if (removeApprovalCount >= _getThreshold()) {
-            _executeAdminRemoval();
         }
     }
 
@@ -123,13 +84,8 @@ contract Administration is ReentrancyGuard {
         return false;
     }
 
-    function getSignatureThreshold() public view returns (uint256) {
+    function _getThreshold() internal view returns (uint256) {
         if (admins.length <= 2) return 1;
         return admins.length - 1;
-    }
-
-    function getAdminCount() public view returns (uint256) {
-        // Logic to return the current number of admins
-        return admins.length; // Placeholder return value
     }
 }
