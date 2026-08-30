@@ -9,13 +9,9 @@ import {AdminLogic} from "./AdminLogic.sol";
 contract Administration is ReentrancyGuard, AdminLogic {
     using SafeERC20 for IERC20;
 
-    error NoAdminsToRemove();
-    error InvalidTokenAmount();
-    error InsufficientTokenBalance();
-    error InvalidEtherAmount();
-    error InsufficientEtherBalance();
-
-    constructor() {}
+    constructor(address _admin) {
+        admins.push(_admin);
+    }
 
     function addAdmin(address _admin) external nonReentrant {
         if (!_isAdmin(msg.sender)) revert NotAdmin();
@@ -33,7 +29,7 @@ contract Administration is ReentrancyGuard, AdminLogic {
     }
 
     function removeAdmin(address _admin) external nonReentrant {
-        if (admins.length == 0) revert NoAdminsToRemove();
+        if (admins.length == 1) revert CannotRemoveLastAdmin();
         if (!_isAdmin(msg.sender)) revert NotAdmin();
         if (!_isAdmin(_admin)) revert AdminNotFound();
         if (hasApprovedRemoval[msg.sender]) revert AlreadyApproved();
@@ -46,37 +42,8 @@ contract Administration is ReentrancyGuard, AdminLogic {
         }
     }
 
-    function getSignatureThreshold() public view returns (uint256) {
-        if (admins.length <= 2) return 1;
-        return admins.length - 1;
-    }
-
     function getAdminCount() public view returns (uint256) {
-        return admins.length;
+        // Logic to return the current number of admins
+        return admins.length; // Placeholder return value
     }
-
-    function sendTokens(IERC20 token, address to, uint256 amount) external nonReentrant {
-        if (!_isAdmin(msg.sender)) revert NotAdmin();
-        if (to == address(0)) revert InvalidAdminAddress();
-        if (amount == 0) revert InvalidTokenAmount();
-
-        uint256 contractBalance = token.balanceOf(address(this));
-        if (amount > contractBalance) revert InsufficientTokenBalance();
-        token.safeTransfer(to, amount);
-    }
-
-    function sendEther(address payable to, uint256 amount) external nonReentrant {
-        if (!_isAdmin(msg.sender)) revert NotAdmin();
-        if (to == address(0)) revert InvalidAdminAddress();
-        if (amount == 0) revert InvalidEtherAmount();
-
-        uint256 contractBalance = address(this).balance;
-        if (amount > contractBalance) revert InsufficientEtherBalance();
-        (bool success, ) = to.call{value: amount}("");
-        require(success, "Ether transfer failed");
-    }
-
-    receive() external payable {}
-
-    fallback() external payable {}
 }
