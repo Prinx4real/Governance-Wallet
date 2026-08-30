@@ -3,6 +3,7 @@ pragma solidity 0.8.25;
 
 abstract contract AdminLogic {
     uint256 public constant MAX_ADMINS = 5;
+    uint256 public signatureThreshold;
     address[] internal admins;
     mapping(address => bool) internal hasApprovedAdd;
     uint256 internal addApprovalCount;
