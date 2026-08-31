@@ -9,6 +9,7 @@ abstract contract AdminLogic {
     uint256 internal addApprovalCount;
     uint256 internal tokenSendApprovalCount;
     uint256 internal etherSendApprovalCount;
+    uint256 internal batchSendApprovalCount;
     uint256 internal removeApprovalCount;
     uint256 internal pendingTokenAmount;
     uint256 internal pendingEtherAmount;
@@ -16,6 +17,7 @@ abstract contract AdminLogic {
     uint256 internal pendingAdminRemovalApprovalAt;
     uint256 internal pendingTokenSendApprovalAt;
     uint256 internal pendingEtherSendApprovalAt;
+    uint256 internal pendingBatchApprovalAt;
 
     address[] internal admins;
     address internal pendingAdmin;
@@ -23,11 +25,13 @@ abstract contract AdminLogic {
     address internal pendingToken;
     address internal pendingTokenRecipient;
     address internal pendingEtherRecipient;
+    bytes32 internal pendingBatchHash;
 
     mapping(address => bool) internal hasApprovedTokenSend;
     mapping(address => bool) internal hasApprovedAdd;
     mapping(address => bool) internal hasApprovedRemoval;
     mapping(address => bool) internal hasApprovedEtherSend;
+    mapping(address => bool) internal hasApprovedBatchSend;
 
     error NotAdmin();
     error InvalidAdminAddress();
@@ -101,6 +105,20 @@ abstract contract AdminLogic {
     function _approveEtherSend() internal {
         hasApprovedEtherSend[msg.sender] = true;
         etherSendApprovalCount++;
+    }
+
+    function _setPendingBatch(bytes32 batchHash) internal {
+        if (pendingBatchHash == bytes32(0)) {
+            pendingBatchHash = batchHash;
+            pendingBatchApprovalAt = block.timestamp;
+        } else if (pendingBatchHash != batchHash) {
+            revert DifferentAdminPending();
+        }
+    }
+
+    function _approveBatchSend() internal {
+        hasApprovedBatchSend[msg.sender] = true;
+        batchSendApprovalCount++;
     }
 
     function _approveAdminRemoval() internal {
@@ -179,6 +197,16 @@ abstract contract AdminLogic {
 
         for (uint256 i = 0; i < admins.length; i++) {
             hasApprovedEtherSend[admins[i]] = false;
+        }
+    }
+
+    function _clearBatchSendState() internal {
+        pendingBatchHash = bytes32(0);
+        pendingBatchApprovalAt = 0;
+        batchSendApprovalCount = 0;
+
+        for (uint256 i = 0; i < admins.length; i++) {
+            hasApprovedBatchSend[admins[i]] = false;
         }
     }
 }
