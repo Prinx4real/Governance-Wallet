@@ -6,7 +6,7 @@ import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {AdminLogic} from "./AdminLogic.sol";
 
-contract Administration is ReentrancyGuard, AdminLogic {
+contract GovernanceWallet is ReentrancyGuard, AdminLogic {
     using SafeERC20 for IERC20;
 
     struct Transfer {
@@ -64,80 +64,98 @@ contract Administration is ReentrancyGuard, AdminLogic {
         return admins.length; // Placeholder return value
     }
 
+    function _executeTransfer(address token, address payable to, uint256 amount, bool isEth) internal {
+        if (isEth) {
+            (bool success, ) = to.call{value: amount}("");
+            if (!success) revert BatchTransferFailed();
+            return;
+        }
+
+        IERC20(token).safeTransfer(to, amount);
+    }
+
+    function _validateTransfer(address token, address payable to, uint256 amount, bool isEth) internal view {
+        if (to == address(0)) revert InvalidAdminAddress();
+        if (amount == 0) {
+            if (isEth) revert InvalidEtherAmount();
+            revert InvalidTokenAmount();
+        }
+
+        if (isEth) {
+            if (amount > address(this).balance) revert InsufficientEtherBalance();
+            return;
+        }
+
+        if (token == address(0)) revert InvalidTokenAddress();
+        if (amount > IERC20(token).balanceOf(address(this))) revert InsufficientTokenBalance();
+    }
+
     function send(address token, address payable to, uint256 amount, bool isEth) external nonReentrant {
         if (!_isAdmin(msg.sender)) revert NotAdmin();
-        if (to == address(0)) revert InvalidAdminAddress();
-        if (amount == 0) revert isEth ? InvalidEtherAmount() : InvalidTokenAmount();
 
         if (isEth) {
             if (hasApprovedEtherSend[msg.sender]) revert AlreadyApproved();
             if (_isApprovalExpired(pendingEtherSendApprovalAt)) {
                 _clearEtherSendState();
             }
+        } else {
+            if (hasApprovedTokenSend[msg.sender]) revert AlreadyApproved();
+            if (_isApprovalExpired(pendingTokenSendApprovalAt)) {
+                _clearTokenSendState();
+            }
+        }
 
-            uint256 contractBalance = address(this).balance;
-            if (amount > contractBalance) revert InsufficientEtherBalance();
+        _validateTransfer(token, to, amount, isEth);
 
+        if (isEth) {
             _setPendingEtherSend(to, amount);
             _approveEtherSend();
 
             if (etherSendApprovalCount >= _getThreshold()) {
-                (bool success, ) = to.call{value: pendingEtherAmount}("");
-                require(success, "Ether transfer failed");
+                _executeTransfer(address(0), to, pendingEtherAmount, true);
                 _clearEtherSendState();
             }
             return;
         }
 
-        if (token == address(0)) revert InvalidTokenAddress();
-        if (hasApprovedTokenSend[msg.sender]) revert AlreadyApproved();
-        if (_isApprovalExpired(pendingTokenSendApprovalAt)) {
-            _clearTokenSendState();
-        }
-
-        IERC20 erc20 = IERC20(token);
-        uint256 contractBalance = erc20.balanceOf(address(this));
-        if (amount > contractBalance) revert InsufficientTokenBalance();
-
         _setPendingTokenSend(token, to, amount);
         _approveTokenSend();
 
         if (tokenSendApprovalCount >= _getThreshold()) {
-            erc20.safeTransfer(to, amount);
+            _executeTransfer(token, to, pendingTokenAmount, false);
             _clearTokenSendState();
+        }
+    }
+
+    function _executeBatchSend(Transfer[] calldata transfers) internal {
+        for (uint256 i = 0; i < transfers.length; i++) {
+            _executeTransfer(transfers[i].token, transfers[i].to, transfers[i].amount, transfers[i].isEth);
         }
     }
 
     function batchSend(Transfer[] calldata transfers) external nonReentrant {
         if (!_isAdmin(msg.sender)) revert NotAdmin();
         if (transfers.length == 0) revert InvalidBatchLength();
+        if (hasApprovedBatchSend[msg.sender]) revert AlreadyApproved();
+        if (_isApprovalExpired(pendingBatchApprovalAt)) {
+            _clearBatchSendState();
+        }
+
+        bytes32 batchHash = keccak256(abi.encode(transfers));
+        _setPendingBatch(batchHash);
+        _approveBatchSend();
 
         uint256 totalEthAmount;
         for (uint256 i = 0; i < transfers.length; i++) {
-            if (transfers[i].to == address(0)) revert InvalidAdminAddress();
-            if (transfers[i].amount == 0) revert transfers[i].isEth ? InvalidEtherAmount() : InvalidTokenAmount();
-
-            if (transfers[i].isEth) {
-                totalEthAmount += transfers[i].amount;
-                continue;
-            }
-
-            if (transfers[i].token == address(0)) revert InvalidAdminAddress();
-            if (transfers[i].amount > IERC20(transfers[i].token).balanceOf(address(this))) {
-                revert InsufficientTokenBalance();
-            }
+            _validateTransfer(transfers[i].token, transfers[i].to, transfers[i].amount, transfers[i].isEth);
+            if (transfers[i].isEth) totalEthAmount += transfers[i].amount;
         }
 
         if (totalEthAmount > address(this).balance) revert InsufficientEtherBalance();
 
-        for (uint256 i = 0; i < transfers.length; i++) {
-            if (transfers[i].isEth) {
-                (bool success, ) = transfers[i].to.call{value: transfers[i].amount}("");
-                if (!success) revert BatchTransferFailed();
-                continue;
-            }
-
-            IERC20(transfers[i].token).safeTransfer(transfers[i].to, transfers[i].amount);
+        if (batchSendApprovalCount >= _getThreshold()) {
+            _executeBatchSend(transfers);
+            _clearBatchSendState();
         }
     }
 

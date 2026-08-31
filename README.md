@@ -1,68 +1,42 @@
-## Foundry
+# Governance Wallet
 
-**Foundry is a blazing fast, portable and modular toolkit for Ethereum application development written in Rust.**
+This repository is an interim working version of a governance-controlled wallet contract.
 
-Foundry consists of:
+## Current status
 
-- **Forge**: Ethereum testing framework (like Truffle, Hardhat and DappTools).
-- **Cast**: Swiss army knife for interacting with EVM smart contracts, sending transactions and getting chain data.
-- **Anvil**: Local Ethereum node, akin to Ganache, Hardhat Network.
-- **Chisel**: Fast, utilitarian, and verbose solidity REPL.
+The smart contract currently includes:
 
-## Documentation
+- admin creation and removal with multi-admin approval
+- a governance-style approval threshold based on admin count
+- a single-value transfer flow
+- a batch transfer flow with an explicit approval step
+- timeout-based reset for stale pending approvals
+- guard checks for duplicate approvals and invalid values
 
-https://book.getfoundry.sh/
+## Important note
 
-## Usage
+This is not the final production version. The contract is still being refactored and cleaned up.
 
-### Build
+## Main contracts
 
-```shell
-$ forge build
+- `src/GovernanceWallet.sol` — public governance logic and transfer execution
+- `src/AdminLogic.sol` — shared admin state and approval logic
+
+## Planned cleanup
+
+- merge repeated validation patterns into shared helpers
+- tighten naming and error conventions
+- add comprehensive tests for admin approval flows and transfers
+- finalize security review and production-ready docs
+
+## Build
+
+```bash
+forge build
 ```
 
-### Test
+## Test
 
-```shell
-$ forge test
+```bash
+forge test
 ```
-
-### Format
-
-```shell
-$ forge fmt
-```
-
-### Gas Snapshots
-
-```shell
-$ forge snapshot
-```
-
-### Anvil
-
-```shell
-$ anvil
-```
-
-### Deploy
-
-```shell
-$ forge script script/Counter.s.sol:CounterScript --rpc-url <your_rpc_url> --private-key <your_private_key>
-```
-
-### Cast
-
-```shell
-$ cast <subcommand>
-```
-
-### Help
-
-```shell
-$ forge --help
-$ anvil --help
-$ cast --help
-```
-# Governance-Wallet
-# Governance-Wallet
